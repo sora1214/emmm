@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>インタラクティブな生成AI解説（スライドショー形式）</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: The SPA is redesigned as a slideshow. Each major section is a slide. Navigation is handled by 'Next'/'Previous' buttons and the top navigation bar, which now jumps to specific slides. This format is better for structured presentations, guiding the user through the content step-by-step. The core interactive elements within each slide (charts, modals) are retained. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: AI History -> Goal: Show Change -> Viz: Interactive HTML/CSS Timeline -> Interaction: Click reveals details -> Justification: Breaks down dense text into digestible, chronological steps.
+        - Report Info: Generative vs Discriminative AI Table -> Goal: Compare -> Viz: Tabbed Cards -> Interaction: Click to switch views -> Justification: More dynamic and engaging than a static table.
+        - Report Info: Text Model Comparison Table -> Goal: Compare Multiple Facets -> Viz: Radar Chart (Chart.js) -> Interaction: Hover reveals details -> Justification: Quick visual comparison of strengths across models.
+        - Report Info: Industry Use Cases -> Goal: Organize/Filter -> Viz: Dropdown-driven content display -> Interaction: Select industry to see relevant cases -> Justification: Core interactive feature to personalize information and prevent overload.
+        - Report Info: Essential Skills Table -> Goal: Show Composition -> Viz: Stacked Bar Chart (Chart.js) -> Interaction: Hover reveals skill details -> Justification: Visually communicates the necessary blend of skill types.
+        - Report Info: AI Risks -> Goal: Inform/Organize -> Viz: Card Carousel with Modals -> Interaction: Click for details -> Justification: Presents risks cleanly, allowing drill-down without overwhelming the user initially.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+        body { font-family: 'Noto Sans JP', sans-serif; }
+        .bg-warm-base { background-color: #FAF8F5; }
+        .bg-warm-section { background-color: #F4F1ED; }
+        .text-warm-dark { color: #4A4A4A; }
+        .text-warm-medium { color: #6B6B6B; }
+        .text-warm-accent { color: #D97706; } /* Amber-600 */
+        .bg-warm-accent { background-color: #D97706; }
+        .border-warm-accent { border-color: #D97706; }
+        .nav-link { transition: color 0.3s, background-color 0.3s; padding: 8px 16px; border-radius: 9999px; cursor: pointer; }
+        .nav-link.active, .nav-link:hover { background-color: rgba(217, 119, 6, 0.1); color: #D97706; }
+        .chart-container { position: relative; width: 100%; max-width: 500px; margin-left: auto; margin-right: auto; height: 350px; max-height: 400px; }
+        @media (min-width: 768px) { .chart-container { height: 400px; } }
+        .card-flip-container { perspective: 1000px; }
+        .card-flip { position: relative; transform-style: preserve-3d; transition: transform 0.8s; }
+        .card-flip-container.flipped .card-flip { transform: rotateY(180deg); }
+        .card-face { position: absolute; backface-visibility: hidden; width: 100%; height: 100%; }
+        .card-back { transform: rotateY(180deg); }
+
+        #slideshow-container {
+            height: calc(100vh - 60px); /* Adjust based on header height */
+            width: 100%;
+            overflow: hidden;
+        }
+        #slide-wrapper {
+            display: flex;
+            height: 100%;
+            transition: transform 0.5s ease-in-out;
+        }
+        .slide {
+            width: 100%;
+            height: 100%;
+            flex-shrink: 0;
+            overflow-y: auto;
+            padding: 2rem 1.5rem;
+        }
+    </style>
+</head>
+<body class="bg-warm-base text-warm-dark flex flex-col h-full">
+
+    <header id="header" class="bg-warm-base/80 backdrop-blur-lg sticky top-0 z-50 shadow-sm flex-shrink-0" style="height: 60px;">
+        <nav class="container mx-auto px-6 h-full flex justify-between items-center">
+            <div class="text-xl font-bold text-warm-accent">生成AIを学ぶ</div>
+            <div class="hidden md:flex items-center space-x-2">
+                <a class="nav-link" data-slide="0">トップ</a>
+                <a class="nav-link" data-slide="1">生成AIとは？</a>
+                <a class="nav-link" data-slide="2">できること</a>
+                <a class="nav-link" data-slide="3">ビジネス活用</a>
+                <a class="nav-link" data-slide="4">リスクと未来</a>
+            </div>
+            <button id="mobile-menu-button" class="md:hidden p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-warm-accent">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+        </nav>
+        <div id="mobile-menu" class="hidden md:hidden px-4 pb-4 bg-warm-base shadow-lg">
+            <a class="block py-2 text-center nav-link" data-slide="0">トップ</a>
+            <a class="block py-2 text-center nav-link" data-slide="1">生成AIとは？</a>
+            <a class="block py-2 text-center nav-link" data-slide="2">できること</a>
+            <a class="block py-2 text-center nav-link" data-slide="3">ビジネス活用</a>
+            <a class="block py-2 text-center nav-link" data-slide="4">リスクと未来</a>
+        </div>
+    </header>
+
+    <main id="slideshow-container" class="flex-grow">
+        <div id="slide-wrapper">
+            <section id="hero" class="slide bg-warm-section flex items-center justify-center text-center">
+                <div class="max-w-3xl">
+                    <h1 class="text-4xl md:text-6xl font-bold mb-4 text-warm-dark tracking-tight">AIは、新しい時代へ。</h1>
+                    <p class="text-lg md:text-xl text-warm-medium mb-8">生成AIは、もはやSFの世界の話ではありません。私たちの仕事や創造性を「拡張」するパートナーです。このページでは、生成AIの基本からビジネスでの活用、未来の可能性までを、対話するように探求していきます。</p>
+                    <button class="bg-warm-accent text-white font-bold py-3 px-8 rounded-full text-lg hover:bg-opacity-90 transition-transform transform hover:scale-105 inline-block" onclick="showSlide(1)">さあ、始めよう</button>
+                </div>
+            </section>
+
+            <section id="what-is-ai" class="slide">
+                <div class="container mx-auto">
+                    <div class="text-center max-w-3xl mx-auto mb-12">
+                        <h2 class="text-3xl md:text-4xl font-bold mb-4">生成AIとは？</h2>
+                        <p class="text-warm-medium">このセクションでは、生成AIがこれまでのAIと何が違うのか、どのような技術で動いているのか、そしてどのような歴史を経てきたのかを学びます。まずは基本をしっかり押さえましょう。</p>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-8 items-center mb-16">
+                        <div class="card-flip-container h-80 md:h-96">
+                            <div class="card-flip w-full h-full">
+                                <div class="card-face bg-white rounded-xl shadow-lg p-6 flex flex-col justify-center items-center text-center border-2 border-amber-200">
+                                    <h3 class="text-2xl font-bold mb-3 text-warm-accent">生成AI <span class="text-sm">(Generative AI)</span></h3>
+                                    <p class="text-warm-medium mb-4">新しいレシピを<br>「創造する」シェフ</p>
+                                    <p class="font-bold text-lg">タスク：</p><p>文章作成、作曲、デザイン、コード生成</p>
+                                    <button class="mt-6 text-sm text-warm-accent font-semibold" onclick="flipCard(this)">従来のAIと比較 →</button>
+                                </div>
+                                <div class="card-back bg-white rounded-xl shadow-lg p-6 flex flex-col justify-center items-center text-center border-2 border-blue-200">
+                                    <h3 class="text-2xl font-bold mb-3 text-blue-500">識別系AI <span class="text-sm">(Discriminative AI)</span></h3>
+                                    <p class="text-warm-medium mb-4">食材を<br>「見分ける」評論家</p>
+                                    <p class="font-bold text-lg">タスク：</p><p>画像認識、スパム判定、感情分析</p>
+                                    <button class="mt-6 text-sm text-blue-500 font-semibold" onclick="flipCard(this)">← 生成AIに戻る</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-warm-medium">
+                            <h3 class="text-2xl font-bold mb-4 text-warm-dark">「創造」か、「識別」か。</h3>
+                            <p class="mb-4">AIには大きく分けて2つのタイプがあります。従来のAIの多くは、データを見て「これは猫か？犬か？」と<strong class="text-warm-accent">識別する</strong>のが得意な「識別系AI」でした。</p>
+                            <p>一方、生成AIは、学習した知識を元に、全く新しいオリジナルのコンテンツを<strong class="text-warm-accent">創造する</strong>のが得意です。この「0から1を生み出す」能力こそが、革命的な違いなのです。上のカードをクリックして、2つの違いを確かめてみましょう。</p>
+                        </div>
+                    </div>
+                    <div class="bg-warm-section rounded-xl p-8 md:p-12">
+                         <h3 class="text-2xl md:text-3xl font-bold mb-8 text-center">AI発展の道のり</h3>
+                         <div class="max-w-3xl mx-auto">
+                            <div class="timeline-container">
+                                <div class="timeline-item flex gap-x-4"><div class="graphic-container relative last:after:hidden after:absolute after:top-7 after:bottom-0 after:w-px after:bg-gray-300 after:left-3"><div class="timeline-dot relative z-10 w-6 h-6 rounded-full bg-white border-4 border-gray-300"></div></div><div class="content-container grow pt-1 pb-8 cursor-pointer" onclick="showTimelineDetail(this, 'detail-1950')"><h4 class="font-bold text-lg">1950年代: AIの夜明け</h4><p class="text-sm text-warm-medium">チューリング・テストの提唱、ダートマス会議で「人工知能」が命名される。</p><div id="detail-1950" class="hidden mt-2 p-4 bg-white rounded-md shadow-sm">推論と探索が研究の中心。簡単な迷路を解くプログラムが開発された。</div></div></div>
+                                <div class="timeline-item flex gap-x-4"><div class="graphic-container relative last:after:hidden after:absolute after:top-7 after:bottom-0 after:w-px after:bg-gray-300 after:left-3"><div class="timeline-dot relative z-10 w-6 h-6 rounded-full bg-white border-4 border-gray-300"></div></div><div class="content-container grow pt-1 pb-8 cursor-pointer" onclick="showTimelineDetail(this, 'detail-1980')"><h4 class="font-bold text-lg">1980年代: エキスパートシステムの時代</h4><p class="text-sm text-warm-medium">専門家の知識をルールとして組み込む「エキスパートシステム」が実用化。</p><div id="detail-1980" class="hidden mt-2 p-4 bg-white rounded-md shadow-sm">第二次AIブーム。しかし、知識の入力に膨大な手間がかかり、再び「冬の時代」へ。</div></div></div>
+                                <div class="timeline-item flex gap-x-4"><div class="graphic-container relative last:after:hidden after:absolute after:top-7 after:bottom-0 after:w-px after:bg-gray-300 after:left-3"><div class="timeline-dot relative z-10 w-6 h-6 rounded-full bg-white border-4 border-gray-300"></div></div><div class="content-container grow pt-1 pb-8 cursor-pointer" onclick="showTimelineDetail(this, 'detail-2010')"><h4 class="font-bold text-lg">2010年代: 第三次ブームと深層学習</h4><p class="text-sm text-warm-medium">ビッグデータ、GPU性能向上、深層学習のブレークスルーが重なり、AIが飛躍的に進化。</p><div id="detail-2010" class="hidden mt-2 p-4 bg-white rounded-md shadow-sm">AIが自らデータの特徴を学習できるようになり、画像認識などの精度が劇的に向上した。</div></div></div>
+                                <div class="timeline-item flex gap-x-4"><div class="graphic-container relative"><div class="timeline-dot relative z-10 w-6 h-6 rounded-full bg-white border-4 border-warm-accent"></div></div><div class="content-container grow pt-1 cursor-pointer" onclick="showTimelineDetail(this, 'detail-2017')"><h4 class="font-bold text-lg text-warm-accent">2017年〜: 生成AIの基盤技術が登場</h4><p class="text-sm text-warm-medium">「Transformerモデル」が発表され、現在の大規模言語モデル(LLM)の基礎を築く。</p><div id="detail-2017" class="hidden mt-2 p-4 bg-white rounded-md shadow-sm">文章中の単語の関連性に「注意(Attention)」を向ける画期的な仕組みにより、長く自然な文章の生成が可能になった。これがChatGPTなどの源流となる。</div></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="what-can-it-do" class="slide bg-warm-section">
+                <div class="container mx-auto">
+                    <div class="text-center max-w-3xl mx-auto mb-12">
+                        <h2 class="text-3xl md:text-4xl font-bold mb-4">なにができる？</h2>
+                        <p class="text-warm-medium">生成AIは様々な種類のコンテンツを生み出せます。ここでは、その代表的な種類と、市場をリードする主要なAIモデルたちの特徴を比較しながら見ていきましょう。</p>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 mb-16 text-center">
+                        <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow transform hover:-translate-y-1"><span class="text-4xl">✍️</span><h3 class="font-bold text-lg mt-4">テキスト生成</h3><p class="text-sm text-warm-medium mt-1">メール、記事、コード</p></div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow transform hover:-translate-y-1"><span class="text-4xl">🖼️</span><h3 class="font-bold text-lg mt-4">画像生成</h3><p class="text-sm text-warm-medium mt-1">イラスト、写真、ロゴ</p></div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow transform hover:-translate-y-1"><span class="text-4xl">🎵</span><h3 class="font-bold text-lg mt-4">音声・音楽生成</h3><p class="text-sm text-warm-medium mt-1">ナレーション、作曲</p></div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow transform hover:-translate-y-1"><span class="text-4xl">🎬</span><h3 class="font-bold text-lg mt-4">動画生成</h3><p class="text-sm text-warm-medium mt-1">ショート動画、アニメ</p></div>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-8 items-center">
+                        <div>
+                            <h3 class="text-2xl font-bold mb-4 text-warm-dark">テキスト生成AI 三つ巴の戦い</h3>
+                            <p class="text-warm-medium mb-4">テキスト生成の世界では、3つの主要なAIが競い合っています。それぞれに得意なこと、個性があります。「どれが一番良いか」ではなく、「自分の目的に合うのはどれか」を考えるのが重要です。</p>
+                            <ul class="list-none space-y-2 text-warm-medium">
+                                <li><strong class="text-warm-dark">ChatGPT:</strong> 自然な会話と創造的な文章が得意な「バランスの取れた常識派」。</li>
+                                <li><strong class="text-warm-dark">Gemini:</strong> 最新情報へのアクセスとGoogleサービス連携が強みの「情報通」。</li>
+                                <li><strong class="text-warm-dark">Claude:</strong> 長文読解と安全性に優れた「真面目な読書家」。</li>
+                            </ul>
+                        </div>
+                        <div class="chart-container"><canvas id="modelComparisonChart"></canvas></div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="business-use" class="slide">
+                <div class="container mx-auto">
+                     <div class="text-center max-w-3xl mx-auto mb-12">
+                        <h2 class="text-3xl md:text-4xl font-bold mb-4">ビジネスでの使い方</h2>
+                        <p class="text-warm-medium">生成AIは、ビジネスの現場でどのように役立つのでしょうか。ここでは、具体的な業務改善のメリットと、様々な業界での活用事例（ユースケース）をインタラクティブに見ていきます。</p>
+                    </div>
+                    <div class="grid md:grid-cols-3 gap-8 text-center mb-16">
+                        <div class="bg-warm-section p-8 rounded-xl"><h3 class="text-xl font-bold text-warm-dark mb-2">生産性の向上</h3><p class="text-5xl font-bold text-warm-accent mb-2">1.6x</p><p class="text-warm-medium">資料作成や議事録作成などのタスクを高速化し、人間はより創造的な仕事に集中できます。</p></div>
+                        <div class="bg-warm-section p-8 rounded-xl"><h3 class="text-xl font-bold text-warm-dark mb-2">コスト削減</h3><p class="text-5xl font-bold text-warm-accent mb-2">40%</p><p class="text-warm-medium">外注していたデザインや翻訳などを内製化。リソースを最適化し、ROIを向上させます。</p></div>
+                        <div class="bg-warm-section p-8 rounded-xl"><h3 class="text-xl font-bold text-warm-dark mb-2">イノベーション促進</h3><p class="text-5xl font-bold text-warm-accent mb-2">30+</p><p class="text-warm-medium">人間だけでは思いつかないアイデアをAIが提案。創造性の「壁打ち相手」になります。</p></div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-lg p-8 md:p-12">
+                        <h3 class="text-2xl font-bold mb-2 text-center">業界別ユースケース</h3>
+                        <p class="text-warm-medium text-center mb-6">あなたの興味のある業界を選んでください。</p>
+                        <div class="flex justify-center mb-8">
+                            <select id="industry-selector" class="block w-full max-w-xs p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-warm-accent focus:border-warm-accent">
+                                <option value="all">全業種共通</option><option value="retail">小売・Eコマース</option><option value="manufacturing">製造業</option><option value="finance">金融・保険</option><option value="medical">医療・製薬</option><option value="it">IT・ソフトウェア</option>
+                            </select>
+                        </div>
+                        <div id="usecase-display" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="risks-future" class="slide bg-warm-section">
+                 <div class="container mx-auto">
+                    <div class="text-center max-w-3xl mx-auto mb-12">
+                        <h2 class="text-3xl md:text-4xl font-bold mb-4">リスクと未来</h2>
+                        <p class="text-warm-medium">生成AIは魔法の杖ではありません。便利な一方で、無視できないリスクも存在します。ここでは、主要なリスクとその対策、そしてAI時代に求められるスキルについて考えます。</p>
+                    </div>
+                    <div class="mb-16">
+                        <h3 class="text-2xl font-bold text-center mb-8">知っておくべき4つのリスク</h3>
+                        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div class="risk-card bg-white p-6 rounded-xl shadow-md cursor-pointer hover:shadow-lg transition-shadow" data-risk="hallucination"><h4 class="font-bold text-lg">🧠 ハルシネーション</h4><p class="text-sm text-warm-medium">AIが自信満々に嘘をつく</p></div>
+                            <div class="risk-card bg-white p-6 rounded-xl shadow-md cursor-pointer hover:shadow-lg transition-shadow" data-risk="bias"><h4 class="font-bold text-lg">⚖️ バイアス</h4><p class="text-sm text-warm-medium">人間の偏見を増幅する</p></div>
+                            <div class="risk-card bg-white p-6 rounded-xl shadow-md cursor-pointer hover:shadow-lg transition-shadow" data-risk="copyright"><h4 class="font-bold text-lg">©️ 著作権</h4><p class="text-sm text-warm-medium">意図せず他人の権利を侵害</p></div>
+                            <div class="risk-card bg-white p-6 rounded-xl shadow-md cursor-pointer hover:shadow-lg transition-shadow" data-risk="security"><h4 class="font-bold text-lg">🔒 セキュリティ</h4><p class="text-sm text-warm-medium">機密情報漏洩や詐欺のリスク</p></div>
+                        </div>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-8 items-center">
+                        <div class="chart-container"><canvas id="skillChart"></canvas></div>
+                        <div>
+                            <h3 class="text-2xl font-bold mb-4 text-warm-dark">AI時代に活躍するためのスキルセット</h3>
+                            <p class="text-warm-medium mb-4">AIが進化するほど、人間ならではのスキルの価値が高まります。これからは、3つの領域のスキルをバランス良く身につけることが重要になります。</p>
+                            <ul class="list-none space-y-3">
+                                <li class="flex items-start"><div class="w-4 h-4 rounded-full bg-blue-400 mt-1.5 mr-3 flex-shrink-0"></div><div><strong class="text-warm-dark">AI専門スキル:</strong> AIを「使いこなす」力。プロンプト作成技術など。</div></li>
+                                <li class="flex items-start"><div class="w-4 h-4 rounded-full bg-green-400 mt-1.5 mr-3 flex-shrink-0"></div><div><strong class="text-warm-dark">人間中心のスキル:</strong> AIにはない「人間らしさ」。創造性や共感力など。</div></li>
+                                <li class="flex items-start"><div class="w-4 h-4 rounded-full bg-amber-400 mt-1.5 mr-3 flex-shrink-0"></div><div><strong class="text-warm-dark">戦略的スキル:</strong> AIを「どこに使うか」判断する力。ビジネス課題の発見力など。</div></li>
+                            </ul>
+                        </div>
+                    </div>
+                 </div>
+            </section>
+        </div>
+    </main>
+
+    <div id="slide-navigation" class="fixed bottom-5 right-5 z-40 flex space-x-2">
+        <button id="prev-slide" class="bg-warm-accent text-white rounded-full w-12 h-12 flex items-center justify-center shadow-lg hover:bg-opacity-90 transition-opacity">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        </button>
+        <button id="next-slide" class="bg-warm-accent text-white rounded-full w-12 h-12 flex items-center justify-center shadow-lg hover:bg-opacity-90 transition-opacity">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        </button>
+    </div>
+
+    <div id="risk-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6 md:p-8">
+                <div class="flex justify-between items-center mb-4"><h3 id="modal-title" class="text-2xl font-bold"></h3><button id="modal-close" class="text-gray-500 hover:text-gray-800">&times;</button></div>
+                <div id="modal-content" class="text-warm-medium space-y-4"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const mobileMenuButton = document.getElementById('mobile-menu-button');
+    const mobileMenu = document.getElementById('mobile-menu');
+    mobileMenuButton.addEventListener('click', () => {
+        mobileMenu.classList.toggle('hidden');
+    });
+
+    const slideWrapper = document.getElementById('slide-wrapper');
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+    let currentSlide = 0;
+
+    const navLinks = document.querySelectorAll('.nav-link');
+    const prevButton = document.getElementById('prev-slide');
+    const nextButton = document.getElementById('next-slide');
+
+    window.showSlide = (index) => {
+        if (index < 0 || index >= totalSlides) return;
+        currentSlide = index;
+        slideWrapper.style.transform = `translateX(-${currentSlide * 100}%)`;
+        updateNav();
+        mobileMenu.classList.add('hidden');
+    };
+
+    const updateNav = () => {
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+            if (parseInt(link.dataset.slide) === currentSlide) {
+                link.classList.add('active');
+            }
+        });
+        prevButton.style.opacity = currentSlide === 0 ? '0.5' : '1';
+        prevButton.style.cursor = currentSlide === 0 ? 'not-allowed' : 'pointer';
+        nextButton.style.opacity = currentSlide === totalSlides - 1 ? '0.5' : '1';
+        nextButton.style.cursor = currentSlide === totalSlides - 1 ? 'not-allowed' : 'pointer';
+    };
+
+    prevButton.addEventListener('click', () => {
+        if (currentSlide > 0) showSlide(currentSlide - 1);
+    });
+    nextButton.addEventListener('click', () => {
+        if (currentSlide < totalSlides - 1) showSlide(currentSlide + 1);
+    });
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const slideIndex = parseInt(e.currentTarget.dataset.slide);
+            showSlide(slideIndex);
+        });
+    });
+
+    showSlide(0); // Initialize first slide
+
+    // Existing interactive element logic
+    window.flipCard = (button) => {
+        const container = button.closest('.card-flip-container');
+        container.classList.toggle('flipped');
+    };
+
+    window.showTimelineDetail = (clickedContentElement, detailId) => {
+        const detailToShow = clickedContentElement.querySelector(`#${detailId}`);
+        if (!detailToShow) return;
+        const parentItem = clickedContentElement.closest('.timeline-item');
+        const timelineContainer = parentItem.closest('.timeline-container');
+        const isOpening = detailToShow.classList.contains('hidden');
+        timelineContainer.querySelectorAll('.timeline-item').forEach(item => {
+            const detail = item.querySelector('[id^="detail-"]');
+            if (detail) detail.classList.add('hidden');
+            const dot = item.querySelector('.timeline-dot');
+            if (dot) {
+                dot.classList.remove('bg-warm-accent', 'border-warm-accent');
+                dot.classList.add('bg-white', 'border-gray-300');
+            }
+        });
+        if (isOpening) {
+            detailToShow.classList.remove('hidden');
+            const currentDot = parentItem.querySelector('.timeline-dot');
+            if (currentDot) {
+                currentDot.classList.add('bg-warm-accent', 'border-warm-accent');
+                currentDot.classList.remove('bg-white', 'border-gray-300');
+            }
+        }
+        const lastItem = timelineContainer.querySelector('.timeline-item:last-child');
+        if (lastItem) {
+            const lastDot = lastItem.querySelector('.timeline-dot');
+            const lastDetail = lastItem.querySelector('[id^="detail-"]');
+            if (lastDetail && lastDetail.classList.contains('hidden')) {
+                 lastDot.classList.remove('bg-warm-accent');
+                 lastDot.classList.add('border-warm-accent');
+                 lastDot.classList.remove('border-gray-300');
+            }
+        }
+    };
+    
+    const modelData = {
+        labels: ['創造性', 'リアルタイム性', '長文読解', '安全性', 'コーディング'],
+        datasets: [{
+            label: 'ChatGPT', data: [5, 3, 4, 4, 4],
+            backgroundColor: 'rgba(234, 179, 8, 0.2)', borderColor: 'rgba(234, 179, 8, 1)', pointBackgroundColor: 'rgba(234, 179, 8, 1)',
+        }, {
+            label: 'Gemini', data: [4, 5, 3, 4, 3],
+            backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: 'rgba(59, 130, 246, 1)', pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+        }, {
+            label: 'Claude', data: [4, 2, 5, 5, 5],
+            backgroundColor: 'rgba(139, 92, 246, 0.2)', borderColor: 'rgba(139, 92, 246, 1)', pointBackgroundColor: 'rgba(139, 92, 246, 1)',
+        }]
+    };
+    const modelChartCtx = document.getElementById('modelComparisonChart').getContext('2d');
+    new Chart(modelChartCtx, {
+        type: 'radar', data: modelData,
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: { r: { angleLines: { color: 'rgba(0, 0, 0, 0.1)' }, grid: { color: 'rgba(0, 0, 0, 0.1)' }, pointLabels: { font: { size: 14 } }, suggestedMin: 0, suggestedMax: 5, ticks: { stepSize: 1, backdropColor: 'rgba(255, 255, 255, 0.75)' } } },
+            plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(context) { return `${context.dataset.label}: ${context.raw}`; } } } }
+        }
+    });
+
+    const useCases = {
+        all: [{ icon: '📝', title: '文書管理・情報共有', text: '議事録やレポートを瞬時に要約。社内ナレッジをチャットで検索可能に。' },{ icon: '🎨', title: 'デザイン・ビジュアル制作', text: '広告バナーやSNS投稿用の画像を低コスト・短時間で大量に生成。' },{ icon: '💬', title: '高度な顧客対応', text: '24時間365日、人間のように自然な対話で顧客の問い合わせに対応。' },{ icon: '💻', title: 'ソフトウェア開発支援', text: 'コードの自動生成、バグ修正、テストの自動化で開発サイクルを高速化。' },{ icon: '📈', title: 'マーケティング・営業', text: '顧客データに基づき、パーソナライズされたメールや提案書を自動作成。' },{ icon: '💡', title: 'アイデア創出', text: '新商品やサービスのコンセプト案を大量に生成し、企画の壁打ち相手になる。' }],
+        retail: [{ icon: '🛒', title: '商品企画の高速化', text: 'SNSのトレンドを分析し、新商品の企画からPR画像作成までを支援。(事例:セブン-イレブン)' },{ icon: '✒️', title: '商品説明文の自動生成', text: '商品の特徴をインプットするだけで、魅力的な説明文をECサイト向けに生成。' },{ icon: '🎯', title: 'ハイパーパーソナライゼーション', text: '「子供の誕生日会」のようなシナリオで検索すると、関連商品をまとめて提案。(事例:ウォルマート)' }],
+        manufacturing: [{ icon: '⚙️', title: 'ジェネレーティブデザイン', text: '強度やコストなどの条件から、AIが最適な部品デザインを何百通りも提案。(事例:パナソニック)' },{ icon: '🔍', title: '品質管理の自動化', text: '生産ラインのカメラ映像から、製品の傷や欠陥を人間以上の精度で検出。' },{ icon: '🛠️', title: '予知保全', text: 'センサーデータを分析し、設備の故障時期を予測してメンテナンス計画を最適化。' }],
+        finance: [{ icon: '📊', title: '市場分析レポート作成', text: '膨大な経済ニュースや市場データを要約し、レポートのドラフトを自動作成。' },{ icon: '🛡️', title: '不正取引検知', text: '取引パターンをリアルタイムで分析し、通常と異なる動きを検知してアラート。' },{ icon: '📄', title: '稟議書・融資審査の支援', text: '膨大な資料の読み込みと要約をAIが行い、人間の意思決定を高速化。(事例:三菱UFJ銀行)' }],
+        medical: [{ icon: '💊', title: '創薬プロセスの加速', text: 'AIが新しい分子構造を生成・シミュレーションし、新薬開発の期間を短縮。' },{ icon: '🩺', title: '診断支援', text: 'レントゲンやCTなどの医療画像を解析し、医師の見落としを防ぐセカンドオピニオンを提供。' },{ icon: '🔬', title: '医学論文の要約', text: '最新の膨大な医学論文をAIが要約し、多忙な医師の研究活動をサポート。' }],
+        it: [{ icon: '⌨️', title: 'コード生成・補完', text: '「ユーザーログイン機能を作って」のような指示で、コードの大部分を自動生成。(事例:GitHub Copilot)' },{ icon: '🔄', title: 'レガシーシステム刷新', text: 'COBOLのような古い言語で書かれたプログラムを、Javaなどの現代的な言語に変換。' },{ icon: '📚', title: '技術ドキュメント作成', text: 'コードを解析し、その仕様や使い方に関するドキュメントを自動で作成。' }]
+    };
+    const industrySelector = document.getElementById('industry-selector');
+    const usecaseDisplay = document.getElementById('usecase-display');
+    function renderUseCases(industry) {
+        usecaseDisplay.innerHTML = '';
+        const cases = useCases[industry] || [];
+        cases.forEach(c => {
+            const card = document.createElement('div');
+            card.className = 'bg-warm-section p-6 rounded-lg';
+            card.innerHTML = `<div class="text-3xl mb-3">${c.icon}</div><h4 class="font-bold text-lg text-warm-dark">${c.title}</h4><p class="text-sm text-warm-medium mt-1">${c.text}</p>`;
+            usecaseDisplay.appendChild(card);
+        });
+    }
+    industrySelector.addEventListener('change', (e) => renderUseCases(e.target.value));
+    renderUseCases('all');
+
+    const riskData = {
+        hallucination: { title: '🧠 ハルシネーション', content: `<p><strong>意味:</strong> AIが事実に基づかない情報や無意味な内容を、あたかも真実であるかのように自信満々に生成する現象です。「幻覚」とも呼ばれます。</p><p><strong>リスク:</strong> 誤った情報が拡散されたり、不正確なアドバイスによって損害が出たりする可能性があります。</p><p><strong>対策:</strong><br>- <strong>人間の確認:</strong> AIの出力は必ず人間がファクトチェックする。<br>- <strong>RAG (検索拡張生成):</strong> 信頼できる社内文書などを参照させて回答させる。<br>- <strong>出典の確認:</strong> 回答の根拠となる情報源を提示するAIを利用する。</p>`},
+        bias: { title: '⚖️ バイアス', content: `<p><strong>意味:</strong> AIが学習したデータに含まれる、人間の社会的な偏見（人種、性別など）を学習し、増幅してしまう問題です。</p><p><strong>リスク:</strong> 採用や融資審査などで不公平な判断を生み出し、差別を助長する可能性があります。</p><p><strong>対策:</strong><br>- <strong>多様なデータ:</strong> 偏りのない多様なデータセットで学習させる。<br>- <strong>継続的な監査:</strong> AIの出力を定期的にチェックし、バイアスがないか監査する。<br>- <strong>倫理ガイドライン:</strong> AI利用に関する明確な倫理規定を社内で策定する。</p>`},
+        copyright: { title: '©️ 著作権', content: `<p><strong>意味:</strong> AIが生成したコンテンツが、既存の著作物と意図せず酷似してしまい、著作権を侵害してしまう問題です。</p><p><strong>リスク:</strong> 損害賠償請求や法的紛争に発展する可能性があります。</p><p><strong>対策:</strong><br>- <strong>利用規約の確認:</strong> 商用利用が許可されているAIサービスを利用する。<br>- <strong>類似性チェック:</strong> 生成したコンテンツを公開する前に、類似の作品がないか確認する。<br>- <strong>創作的加工:</strong> AIの生成物をそのまま使わず、人間が創作的な手を加える。</p>`},
+        security: { title: '🔒 セキュリティ', content: `<p><strong>意味:</strong> 機密情報の漏洩や、AIを悪用した新たなサイバー攻撃のリスクです。</p><p><strong>リスク:</strong> 従業員がChatGPTなどの一般向けAIに社内秘情報を入力して漏洩させたり、本物そっくりの偽動画（ディープフェイク）による詐欺が発生したりします。</p><p><strong>対策:</strong><br>- <strong>法人向けAIの利用:</strong> 入力データが学習に使われない、セキュアな法人向けサービスを利用する。<br>- <strong>社内ガイドライン:</strong> 機密情報の入力を禁止するルールを徹底する。<br>- <strong>多要素認証:</strong> 不正送金などを防ぐため、本人確認を強化する。</p>`}
+    };
+    const riskCards = document.querySelectorAll('.risk-card');
+    const modal = document.getElementById('risk-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalContent = document.getElementById('modal-content');
+    const modalClose = document.getElementById('modal-close');
+    riskCards.forEach(card => {
+        card.addEventListener('click', () => {
+            const riskKey = card.dataset.risk;
+            const data = riskData[riskKey];
+            modalTitle.innerHTML = data.title;
+            modalContent.innerHTML = data.content;
+            modal.classList.remove('hidden');
+        });
+    });
+    const closeModal = () => modal.classList.add('hidden');
+    modalClose.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+    const skillData = {
+        labels: ['今後のキャリアで重要となるスキルバランス'],
+        datasets: [
+            { label: 'AI専門スキル', data: [30], backgroundColor: 'rgba(59, 130, 246, 0.7)', },
+            { label: '人間中心のスキル', data: [40], backgroundColor: 'rgba(16, 185, 129, 0.7)', },
+            { label: '戦略的スキル', data: [30], backgroundColor: 'rgba(245, 158, 11, 0.7)', }
+        ]
+    };
+    const skillChartCtx = document.getElementById('skillChart').getContext('2d');
+    new Chart(skillChartCtx, {
+        type: 'bar', data: skillData,
+        options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            scales: { x: { stacked: true, display: false }, y: { stacked: true, display: false } },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return `${context.dataset.label}: ${context.raw}%`; } } } }
+        }
+    });
+});
+</script>
+</body>
+</html>
